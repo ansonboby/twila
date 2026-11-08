@@ -98,6 +98,16 @@ If your app grows large choice sets or non-English traffic, switch the gate;
 nothing else changes. `twila eval` runs gate-vs-gate as arms — publish your
 own comparison table, nobody has one for the router role.
 
+## The UI: decisions, visible
+
+```bash
+uv run twila web        # http://127.0.0.1:2790
+```
+
+Every turn shows what the gate decided — domain, effort class, budget,
+thinking on/off, gate latency, TwIL cost, verify score — before the answer.
+The receipt is the product.
+
 ## Files
 
 ```
