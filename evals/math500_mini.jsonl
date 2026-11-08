@@ -1,0 +1,10 @@
+{"id": "m1", "level": 1, "question": "How many positive integers n < 1000 are divisible by 3 but not by 5?", "answer": "267"}
+{"id": "m2", "level": 1, "question": "If $f(x)=\\frac{x+4}{x^2+ax+b}$, and $f(x)$ has two vertical asymptotes at $x=1$ and $x=-2$, find the sum $a+b$.", "answer": "3"}
+{"id": "m3", "level": 2, "question": "How many numbers are in the list $ 1, 2, 5, 26, 37, 96, 58, 97, 92, 10, 27, 3, 13, 67, 55$ that are greater than 23 but less than 72?", "answer": "6"}
+{"id": "m4", "level": 2, "question": "Dan owns the mall and sees 20 customers every 15 minutes while it's open from 9am to 5pm. How many customers visit the mall in one day?", "answer": "640"}
+{"id": "m5", "level": 2, "question": "Mark is buying some donuts. If each donut costs $1.50, and Mark bought 6 donuts which were $0.50 cheaper than the sale price of donuts, how much will Mark spend in total?", "answer": "9"}
+{"id": "m6", "level": 3, "question": "Suppose $x$ and $y$ are both positive and $\\log_{xy}(x^2) + \\log_{xy}(y^4) = 12$. Compute $\\log_{xy}(\\sqrt{xy})$.", "answer": "3"}
+{"id": "m7", "level": 3, "question": "Let $a$ and $b$ be positive real numbers, and let $x$ be a positive solution of $x^2 - ax + b = 0$ and $y$ a positive solution of $y^2 - ay + b = 0$ with $x \\ne y$. Compute $a$ such that $x/y + y/x = 293/34$.", "answer": "\\frac{288}{17}"}
+{"id": "m8", "level": 3, "question": "The sum of the first $n$ terms of the sequence $1, 5, 15, 34, \\ldots$ (differences are $4, 10, 19, \\ldots$ where second differences grow by 1 each time starting at 6) is 150. Find $n$.", "answer": "4"}
+{"id": "m9", "level": 3, "question": "Find the number of positive integers $n \\le 1000$ such that $15n$ is a perfect square.", "answer": "9"}
+{"id": "m10", "level": 3, "question": "There exist exactly three positive real values of $x$ that satisfy $x^2 + ax + b = 0$ has roots... Let $S$ be the sum of the squares of the first $k$ positive integers for $k = 8$. Compute $S$.", "answer": "204"}
