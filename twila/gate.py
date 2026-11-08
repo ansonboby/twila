@@ -36,12 +36,12 @@ PRE_QUESTIONS = {
     },
     "difficulty": {
         "type": "score",
-        "instructions": "How much sustained reasoning does a correct answer need? 0 = one-liner, 1 = a few clear steps, 2 = contest-class, long derivation.",
-        "criteria": {0: "one-liner", 1: "a few steps", 2: "contest-class"},
+        "instructions": "How much sustained reasoning does a correct answer need?",
+        "criteria": ["a one-liner", "a few clear steps", "contest-class, long derivation"],
     },
     "needs_thinking": {
         "type": "noul",
-        "instructions": "Does correctness require extended step-by-step reasoning, rather than recall?",
+        "instructions": "Would a careful expert need to work through multiple steps of derivation or computation on paper to get this right (contest math proofs, multi-step algorithm debugging)? Or is recall/scomputed quickly enough that one line suffices?",
     },
     "policy_violation": {
         "type": "noul",
@@ -105,22 +105,107 @@ class LayaGate:
     def _load(self):
         from laya import Router
 
-        self.router = (Router(strict=self._checkpoint) if self._checkpoint
-                       else Router(preload=True))
+        if self._checkpoint:  # pin one checkpoint as the default route
+            self.router = Router(default=_alias_checkpoint(self._checkpoint), preload=True)
+        else:
+            self.router = Router(preload=True)
 
     def _predict(self, state: dict, questions: dict) -> dict:
         """One batched decision call: all questions over one state share a read."""
         out = self.router.predict(state, questions)
-        return out if isinstance(out, dict) else out.to_dict()
+        out = out if isinstance(out, dict) else out.to_dict()
+        return out.get("answers", out)
+
+    @staticmethod
+    def _value(block, default=0.0) -> float:
+        if not isinstance(block, dict):
+            return default
+        for k in ("noul", "score", "value", "label"):
+            if k in block:
+                v = block[k]
+                return float(v) if isinstance(v, (int, float)) else _bool_val(v)
+        return default
+
+    # -- pre-check: what did the user ask, and how much TwIL do we owe it? ----
+    def gate(self, text: str) -> Decision:
+        t0 = time.perf_counter()
+        raw = self._predict({"text": text}, PRE_QUESTIONS)
+
+        def block(k):
+            v = raw.get(k, {})
+            return v if isinstance(v, dict) else {"value": v}
+
+        dom = block("domain")
+        probs = dom.get("probabilities") or {}
+        self.last_decision = Decision(
+            domain=str(dom.get("choice", dom.get("value", dom.get("label", "general")))),
+            difficulty=_score_to_level(block("difficulty").get("score",
+                                       block("difficulty").get("value", 1))),
+            needs_thinking=self._value(block("needs_thinking"),
+                                       default=_bool_val(block("needs_thinking"))) > 0.5,
+            policy_violation=self._value(block("policy_violation"),
+                                         default=_bool_val(block("policy_violation"))) > 0.85,
+            raw=raw,
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+        )
+        # Laya unconfident on this input: fail safe toward more reasoning.
+        if probs and max(probs.values()) < 0.3 and self.last_decision.difficulty < 2:
+            self.last_decision.difficulty = 2
+        return self.last_decision
+
+    # -- post-check: is the finished answer trustworthy -----------------------
+    def verify(self, question: str, answer: str) -> dict:
+        if "\\boxed" in answer:
+            answer = answer.rsplit("\\boxed", 1)[-1].rstrip("$]}").strip()
+        raw = self._predict({"question": question, "answer": answer[:2000]},
+                            VERIFY_QUESTIONS)
+        return {"answered": self._val(raw.get("answered", {})),
+                "confidence": self._val(raw.get("high_confidence", {})),
+                "raw": raw}
+
+    @staticmethod
+    def _val(block) -> float:
+        if not isinstance(block, dict):
+            return 0.0
+        for k in ("noul", "value", "label"):
+            if k in block:
+                v = block[k]
+                return float(v) if isinstance(v, (int, float)) else _bool_val(v)
+        return 0.0
+
+    # -- plan: decision -> generation settings --------------------------------
+    def plan(self, text: str, variant: str = "balanced") -> Plan:
+        d = self.gate(text)
+        if d.policy_violation:
+            return Plan(d, False, 0, "", False, refused=True,
+                        reason="laya policy gate (p>0.85)")
+        # needs_thinking proved zero-shot-unreliable on base checkpoints; it is
+        # logged, not trusted. math/code at score>=1 always think, like the
+        # card's own protocol (thinking on for graded tasks).
+        if d.domain in ("math", "code") and d.difficulty >= 1:
+            level = max(d.difficulty, 1)
+        elif d.difficulty >= 2:
+            level = 2
+        elif d.difficulty <= 0:
+            level = 0
+        else:
+            level = 1
+        pol = LEVELS[level]
+        return Plan(d, pol["thinking"], pol["budget"],
+                    DOMAIN_PROMPTS.get(d.domain, DOMAIN_PROMPTS["general"]),
+                    pol["retry"])
 
 
-def make_gate() -> "LayaGate":
-    """TWILA_GATE=local (default) | http (any /v1/systemone server, e.g. Jev)."""
-    import os
+def _alias_checkpoint(name: str) -> str:
+    """Map any user-facing checkpoint name onto a Router-recognized alias."""
+    if name.startswith("convaiinnovations/laya"):
+        return name[len("convaiinnovations/"):]  # e.g. 'laya-typed-decisions'
+    return name
 
-    if os.environ.get("TWILA_GATE") == "http":
-        return HTTPGate()
-    return LayaGate(checkpoint=os.environ.get("TWILA_GATE_CHECKPOINT") or None)
+
+def _bool_val(v) -> float:
+    """Local router wraps booleans as plain bools; HTTP path sends probabilities."""
+    return 1.0 if v in (True, "true", "True") else (0.0 if v in (False, "false", "False") else 0.5)
 
 
 class HTTPGate(LayaGate):
@@ -139,11 +224,9 @@ class HTTPGate(LayaGate):
         self.base_url = os.environ["TWILA_GATE_BASE_URL"]
         self.key = os.environ["TWILA_GATE_API_KEY"]
         self.model = os.environ.get("TWILA_GATE_MODEL", "")
-        self.last_decision = None  # set by gate() as usual; no heavy import
+        self.last_decision = None  # no heavy local checkpoint
 
     def _predict(self, state: dict, questions: dict) -> dict:
-        import os
-
         import requests
 
         body = {"state": " ".join(str(v) for v in state.values()), "questions": questions}
@@ -155,13 +238,12 @@ class HTTPGate(LayaGate):
             json=body,
         )
         r.raise_for_status()
-        answers = (r.json().get("answers") or {})
-        return self._normalize(answers, questions)
+        return self._normalize(r.json().get("answers") or {}, questions)
 
     @staticmethod
     def _normalize(answers: dict, questions: dict) -> dict:
-        """Turn /v1/systemone answers into the internal {value, probabilities} shape
-        that gate()/verify() already parse."""
+        """Turn /v1/systemone answers into the internal {value, probabilities}
+        shape the base class already parses."""
         out = {}
         for qid, spec in questions.items():
             ans = answers.get(qid, {})
@@ -171,71 +253,18 @@ class HTTPGate(LayaGate):
             elif typ == "score":
                 val = float(ans.get("score", 1))  # level index, may be fractional
             else:
-                val = float(ans.get("noul", 0.0)) > 0.5
+                val = float(ans.get("noul", 0.0))
             out[qid] = {"value": val,
                         "probabilities": ans.get("probabilities", {}),
                         "confidence": ans.get("confidence"),
                         "answer_confidence": ans.get("answer_confidence")}
         return out
 
-    @staticmethod
-    def _value(block, default=0.0) -> float:
-        if not isinstance(block, dict):
-            return default
-        v = block.get("value", block.get("label", default))
-        return float(v) if isinstance(v, (int, float)) else default
 
-    # -- pre-check: what did the user ask for, and how much Execution do we owe --
-    def gate(self, text: str) -> Decision:
-        if not hasattr(self, "router"):
-            self._load()
-        t0 = time.perf_counter()
-        raw = self._predict({"text": text}, PRE_QUESTIONS)
+def make_gate() -> LayaGate:
+    """TWILA_GATE=local (default) | http (any /v1/systemone server, e.g. Jev)."""
+    import os
 
-        def block(k):
-            v = raw.get(k, {})
-            return v if isinstance(v, dict) else {"value": v}
-
-        dom = block("domain")
-        self.last_decision = Decision(
-            domain=str(dom.get("value", dom.get("label", "general"))),
-            difficulty=_score_to_level(block("difficulty").get("value", 1)),
-            needs_thinking=self._value(block("needs_thinking")) > 0.5,
-            policy_violation=self._value(block("policy_violation")) > 0.85,
-            raw=raw,
-            latency_ms=int((time.perf_counter() - t0) * 1000),
-        )
-        # Laya degraded on odd input (no strong signal): fail safe to hard.
-        dom_conf = max(block("domain").get("probabilities", {}).values() or [0]) if isinstance(block("domain"), dict) else 0
-        if dom_conf < 0.3 and self.last_decision.difficulty < 2:
-            self.last_decision.difficulty = 2
-        return self.last_decision
-
-    # -- post-check: is the finished answer trustworthy -----------------------
-    def verify(self, question: str, answer: str) -> dict:
-        if not hasattr(self, "router"):
-            self._load()
-        if "\\boxed" in answer:
-            answer = answer.rsplit("\\boxed", 1)[-1].rstrip("$]}").strip()
-        raw = self._predict({"question": question, "answer": answer[:2000]},
-                            VERIFY_QUESTIONS)
-        return {"answered": self._value(raw.get("answered", {})),
-                "confidence": self._value(raw.get("high_confidence", {})),
-                "raw": raw}
-
-    # -- plan: decision -> generation settings --------------------------------
-    def plan(self, text: str, variant: str = "balanced") -> Plan:
-        d = self.gate(text)
-        if d.policy_violation:
-            return Plan(d, False, 0, "", False, refused=True,
-                        reason="laya policy gate (p>0.85)")
-        # level: what the decision says, but never fully coast on easy scores
-        # below level 1 unless laya is clear that no reasoning is needed.
-        if d.needs_thinking or d.difficulty >= 2:
-            level = d.difficulty
-        else:
-            level = min(d.difficulty, 0)
-        pol = LEVELS[level]
-        return Plan(d, pol["thinking"], pol["budget"],
-                    DOMAIN_PROMPTS.get(d.domain, DOMAIN_PROMPTS["general"]),
-                    pol["retry"])
+    if os.environ.get("TWILA_GATE") == "http":
+        return HTTPGate()
+    return LayaGate(checkpoint=os.environ.get("TWILA_GATE_CHECKPOINT") or None)

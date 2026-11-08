@@ -110,7 +110,48 @@ tests/             gate/scorer tests (pytest)
 scripts/serve.sh   download + serve the GGUF
 ```
 
+## Prior art & theory (the honest lineage)
+
+The architecture isn't wired to one lab's paper — it's the convergence of several
+real, citable lines of work:
+
+- **Kahneman, _Thinking, Fast and Slow_ (2011)** — the System 1 / System 2
+  framing this harness makes literal: fast pattern-level decisions (Laya) vs
+  slow deliberate reasoning (TwIL-8B).
+- **Banino et al., _PonderNet_ (DeepMind, 2021)** — [arXiv:2107.07467](https://arxiv.org/abs/2107.07467) —
+  learning *when* to keep thinking: an explicit, learned halting signal. Our
+  gate is an externalized, decoupled version of that signal.
+- **Graves, _Adaptive Computation Time_ (DeepMind, 2016)** — [arXiv:1603.08983](https://arxiv.org/abs/1603.08983) —
+  the original "spend computation per-input, not per-model".
+- **Chen et al., _FrugalGPT_ (Stanford, 2023)** — [arXiv:2305.05176](https://arxiv.org/abs/2305.05176) —
+  model cascades that cut LLM cost several-fold with accuracy held, by scoring
+  when the cheap route is good enough.
+- **Ong et al., _RouteLLM_ (LMSYS, 2024)** — [arXiv:2406.18665](https://arxiv.org/abs/2406.18665) —
+  learned routers between strong and weak models; 2x cost reduction results.
+- **webAI, TwIL-8B model card (2026)** — the reasoner and its token-budget
+  protocol; **ConvAI Innovations, Laya (2026)** — the typed-decision gate.
+
+What's new here is only the composition: both systems **open-weight and local
+on a laptop**, decisions externalized into a reusable gate (swappable via one
+protocol), every decision receipted, and an eval that measures the router's
+efficiency claim directly.
+
 ## Honest limits
+
+- `needs_thinking` and the verify gate are **logged but not trusted**: base
+  Laya checkpoints are zero-shot weak outside their training distribution
+  (documented upstream). Routing rides on `domain` + `difficulty score`,
+  which held up in smoke tests; everything is in receipts for calibration
+  and the fine-tune flywheel.
+- Laya's default checkpoints are weak zero-shot on domains far from their
+  training distribution — thresholds `0.5`/`0.85` are not calibrated.
+  Calibrate on your own receipts.
+- `choice` degrades over ~20 options (upstream docs); chunk-filter large
+  candidate sets via `noul` first, or switch the gate to Jev.
+- TwIL-8B ships a webai non-commercial license; Laya is Apache-2.0.
+- Q4_K_M quantization costs some score vs the card's bf16 evals.
+- CPU throughput is real-world thin (~1 tok/s class); the receipts record
+  it. Raise budgets, not expectations, without a GPU.
 
 - Laya's default checkpoints are weak zero-shot on domains far from their
   training distribution — thresholds `0.5`/`0.85` here are first-guesses, not

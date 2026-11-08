@@ -57,12 +57,16 @@ class TwilClient:
         if system:
             prompt = [{"role": "system", "content": system}, *prompt]
         t0 = time.perf_counter()
+        kwargs = {}
+        if thinking is not None:  # Granite template accepts this; server may not
+            kwargs["chat_template_kwargs"] = {"enable_thinking": bool(thinking)}
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=prompt,
             max_tokens=budget,
             temperature=temperature,
             top_p=top_p,
+            extra_body=kwargs,
         )
         dt = time.perf_counter() - t0
         reasoning, content = split_thinking(completion.choices[0].message.content or "")

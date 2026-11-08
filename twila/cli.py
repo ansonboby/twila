@@ -84,8 +84,10 @@ def main(argv=None):
 
     p = sub.add_parser("ask"); p.add_argument("message"); p.set_defaults(fn=cmd_ask)
     p = sub.add_parser("chat"); p.set_defaults(fn=cmd_chat)
-    p = sub.add_parser("receipts"); p.add_argument("-n", type=int, default=3);
+    p = sub.add_parser("receipts"); p.add_argument("-n", type=int, default=3)
     p.set_defaults(fn=cmd_receipts)
+    p = sub.add_parser("web", help="UI: the decisions, visible (http://127.0.0.1:2790)")
+    p.set_defaults(fn=lambda ns: __import__("twila.web", fromlist=["x"]).main())
     p = sub.add_parser("eval")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--budget", type=int, default=16384)

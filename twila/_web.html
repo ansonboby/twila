@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>twila — decide fast, think deep, pay only what's needed</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #11151f; --line: #1e2433;
+    --text: #dbe2f0; --dim: #6b7690;
+    --s1: #7c5cff;      /* system 1 violet */
+    --s2: #21c7a8;      /* system 2 teal   */
+    --warn: #ff6b6b; --ok: #3ddc84;
+  }
+  * { box-sizing: border-box; margin: 0 }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.55 ui-sans-serif, system-ui, sans-serif;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid var(--line); padding: 14px 20px;
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  .mark { font-weight: 700; letter-spacing: .02em; font-size: 17px }
+  .mark b { color: var(--s1) } .mark i { color: var(--s2); font-style: normal }
+  .tagline { color: var(--dim); font-size: 13.5px }
+  #stats { margin-left: auto; color: var(--dim); font-size: 12.5px; font-variant-numeric: tabular-nums }
+  #stats b { color: var(--text) }
+  main { flex: 1; overflow-y: auto; scroll-behavior: smooth }
+  .col { max-width: 780px; margin: 0 auto; padding: 20px 16px 40px }
+  .q { text-align: right; margin: 18px 0 4px }
+  .q span {
+    display: inline-block; background: var(--panel); border: 1px solid var(--line);
+    padding: 9px 13px; border-radius: 12px 12px 3px 12px; max-width: 85%;
+  }
+  .gate {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 6px;
+    font: 12px/1 ui-monospace, monospace;
+  }
+  .chip {
+    border: 1px solid var(--line); background: #131828;
+    padding: 5px 9px; border-radius: 999px; color: var(--dim);
+    animation: pop .25s ease;
+  }
+  .chip.s1 { color: #b9a8ff; border-color: #3d2f7a }
+  .chip.s2 { color: #7ee6cf; border-color: #1d4a41 }
+  .chip.warn { color: #ffb0b0; border-color: #6b2b2b }
+  .chip.ok { color: #a8e6b0 }
+  .chip em { font-style: normal; color: var(--dim) }
+  @keyframes pop { from { transform: scale(.9); opacity: 0 } }
+  .a { white-space: pre-wrap; margin: 2px 0 6px }
+  .a thinking { display: block; color: var(--dim); font: 12.5px/1.5 ui-monospace, monospace;
+    border-left: 2px solid #23293a; padding: 2px 0 2px 10px; margin: 8px 0; white-space: pre-wrap }
+  details { margin: 6px 0 18px; color: var(--dim); font-size: 12px }
+  details summary { cursor: pointer; user-select: none }
+  details pre { margin: 6px 0 0; padding: 10px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; overflow-x: auto }
+  form { border-top: 1px solid var(--line); padding: 14px 16px; display: flex; gap: 10px }
+  .colf { max-width: 780px; margin: 0 auto; width: 100%; display: flex; gap: 10px }
+  input {
+    flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 12px 14px; border-radius: 10px; font: inherit; outline: none;
+  }
+  input:focus { border-color: #33406a }
+  button {
+    background: var(--s1); border: 0; color: #fff; font-weight: 600;
+    padding: 0 18px; border-radius: 10px; cursor: pointer; font: inherit;
+  }
+  button:disabled { opacity: .5; cursor: default }
+  .empty { color: var(--dim); text-align: center; margin-top: 12vh }
+  .empty h2 { color: var(--text); margin: 8px 0 }
+  .pill { display:inline-block; width:7px; height:7px; border-radius:50%;
+    background: var(--s1); animation: blink 1s infinite; margin-right:6px; vertical-align:middle }
+  @keyframes blink { 50% { opacity: .2 } }
+</style>
+</head>
+<body>
+<header>
+  <div class="mark"><b>twil</b><i>a</i></div>
+  <div class="tagline">system&nbsp;1 decides &middot; system&nbsp;2 thinks &middot; every decision visible</div>
+  <div id="stats">loading…</div>
+</header>
+
+<main><div class="col" id="log">
+  <div class="empty"><h2>Ask anything.</h2>
+  Laya (421M) answers domain, difficulty, effort and policy questions about your message in one forward pass — TwIL-8B (8.8B) then reasons exactly as hard as was decided.</div>
+</div></main>
+
+<form id="f"><div class="colf">
+  <input id="in" placeholder="ask twila… (receipts saved to ~/.twila/receipts)" autocomplete="off">
+  <button id="btn">Ask</button>
+</div></form>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = t => t.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function chip(cls, label, val, dim) {
+  return `<span class="chip ${cls}">${label}${dim?` <em>${dim}</em>`:""}${val!==undefined&&val!==null?` ${val}`:""}</span>`;
+}
+
+function renderGate(g, v, gen, retried) {
+  const lvlName = {0:"one-liner",1:"steps",2:"contest"}[g.difficulty] ?? g.difficulty;
+  let chips =
+    chip("s1","laya", g.latency_ms+"ms") +
+    chip("s1","domain", g.domain) +
+    chip("s1","effort", lvlName) +
+    chip("","budget", (g.budget||0).toLocaleString()+" tok") +
+    chip("", "thinking", g.thinking?"on":"off") +
+    chip("s2","twil", Math.round(gen.latency||0)+"s", (gen.tokens_out||0)+" tok");
+  if (v) chips += chip((v.answered>0.5&&v.confidence>0.3)?"ok":"warn","verify",(v.confidence).toFixed(2));
+  if (retried) chips += chip("warn","retried");
+  return `<div class="gate">${chips}</div>`;
+}
+
+async function stats() {
+  const s = await (await fetch("/api/stats")).json();
+  $("#stats").innerHTML = `${s.decisions} decisions &middot; avg gate <b>${s.avg_gate_ms??"—"}ms</b> &middot; ${s.tokens_out.toLocaleString()} tok spent`;
+}
+
+$("#f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const txt = $("#in").value.trim(); if (!txt) return;
+  $("#in").value = ""; $("#btn").disabled = true;
+  const log = $("#log"); const empty = log.querySelector(".empty"); if (empty) empty.remove();
+  log.insertAdjacentHTML("beforeend", `<div class="q"><span>${esc(txt)}</span></div>
+    <div id="wait"><span class="pill"></span>laya is deciding…</div>`);
+  log.scrollTop = log.scrollHeight;
+  try {
+    const r = await (await fetch("/api/ask", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({message: txt})})).json();
+    $("#wait")?.remove();
+    if (r.error) { log.insertAdjacentHTML("beforeend", `<div class="a" style="color:var(--warn)">${r.error}</div>`); return; }
+    const chips = renderGate(r.gate, r.verify, r.generation, r.retried);
+    const answer = esc(r.answer).replace(/think[a-z]&gt;/g,"").replace(/&gt;\n\n?/g,"");
+    log.insertAdjacentHTML("beforeend", `${chips}<div class="a">${answer}</div>`);
+  } catch (err) {
+    $("#wait")?.remove();
+    log.insertAdjacentHTML("beforeend", `<div class="a" style="color:var(--warn)">harness unreachable — is scripts/serve.sh running?</div>`);
+  }
+  stats();
+  log.scrollTop = log.scrollHeight;
+  $("#btn").disabled = false; $("#in").focus();
+});
+stats(); $("#in").focus();
+</script>
+</body>
+</html>

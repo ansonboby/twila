@@ -1,6 +1,6 @@
 [project]
 name = "twila"
-version = "0.1.0"
+version = "0.2.0"
 description = "TwIL-8B harness with Laya System-1 routing: chat, receipts, and the eval that proves the router saves tokens."
 requires-python = ">=3.12"
 dependencies = [
@@ -9,6 +9,9 @@ dependencies = [
     "openai>=1.100",
     "huggingface-hub>=1.0",
     "rich>=14.0",
+    "fastapi>=0.162.2",
+    "uvicorn[standard]>=0.54.0",
+    "requests>=2.34.2",
 ]
 
 [project.scripts]
