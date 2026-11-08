@@ -44,7 +44,8 @@ class TwilClient:
     def __init__(self, base_url: str = DEFAULT_SERVER, model: str = "TwIL-8B"):
         from openai import OpenAI
 
-        self.client = OpenAI(base_url=base_url, api_key="none", max_retries=0)
+        self.client = OpenAI(base_url=base_url, api_key="none", max_retries=0,
+                             timeout=3600)  # CPU: 30+ min generations are normal
         self.model = model
 
     def ask(

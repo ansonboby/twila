@@ -69,7 +69,7 @@ def run_arm(harness, problems, arm: str):
         t0 = time.perf_counter()
         if arm == "raw":
             turn = harness.twil.ask([{"role": "user", "content": p["question"]}],
-                                    budget=18000, thinking=True)
+                                    budget=4096, thinking=True)
             content, diff, toks = turn.content, 2, turn.tokens_out
         else:
             content, r = harness.ask(p["question"])
