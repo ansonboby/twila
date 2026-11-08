@@ -25,7 +25,9 @@ _BOXED = re.compile(r"\\boxed\{([^{}]*)\}")
 
 
 def extract_answer(text: str) -> str:
-    m = _BOXED.findall(text or "")
+    text = (text or "")
+    text = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"(\1/\2)", text)  # \frac{a}{b} -> (a/b)
+    m = _BOXED.findall(text)
     if m:
         return m[-1].strip().rstrip(".")
     text = (text or "").strip()

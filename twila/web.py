@@ -11,13 +11,19 @@ from pathlib import Path
 from .harness import RECEIPTS_DIR, Harness
 
 _page = (Path(__file__).parent / "_web.html").read_text()
+_HARNESS: list = []  # lazy: llama-server owns RAM while idle; laya loads on first ask
 
+
+def _get_harness():
+    if not _HARNESS:
+        _HARNESS.append(Harness())
+    return _HARNESS[0]
+
+    app = FastAPI(title="twila")
 
 def create_app():
     from fastapi import FastAPI
     from fastapi.responses import HTMLResponse, JSONResponse
-
-    h = Harness()
 
     app = FastAPI(title="twila")
 
@@ -30,6 +36,7 @@ def create_app():
         message = (body.get("message") or "").strip()
         if not message:
             return JSONResponse({"error": "empty message"}, status_code=400)
+        h = _get_harness()
         answer, r = h.ask(message)
         decision = h.gate.last_decision
         return {
@@ -49,7 +56,10 @@ def create_app():
         files = sorted(RECEIPTS_DIR.glob("*.json"))
         n, ms, tok = len(files), [], 0
         doms = {}
+        file_items = []
         for f in files[-200:]:
+            file_items.append(f)
+        for f in file_items:
             try:
                 d = json.loads(f.read_text())
             except Exception:

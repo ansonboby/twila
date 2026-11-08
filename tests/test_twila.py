@@ -50,7 +50,7 @@ def test_split_thinking(raw, delivery):
 
 def test_extract_boxed():
     assert extract_answer("we get $\\boxed{267}$ total") == "267"
-    assert extract_answer("...final $\\boxed{\\frac{288}{17}}$") == "\\frac{288}{17}"
+    assert extract_answer("...final $\\boxed{\\frac{288}{17}}$") == "(288/17)"
 
 
 @pytest.mark.parametrize("exp,got,ok", [

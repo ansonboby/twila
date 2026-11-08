@@ -96,7 +96,7 @@ def _score_to_level(raw) -> int:
 
 
 class LayaGate:
-    def __init__(self, checkpoint: str | None = None, preload: bool = True):
+    def __init__(self, checkpoint: str | None = None, preload: bool = False):
         self._checkpoint = checkpoint
         self.last_decision: Decision | None = None
         if preload:
@@ -109,6 +109,11 @@ class LayaGate:
             self.router = Router(default=_alias_checkpoint(self._checkpoint), preload=True)
         else:
             self.router = Router(preload=True)
+
+    def _ensure(self):
+        """Lazy model load for the local gate; HTTP gates override as no-op."""
+        if not hasattr(self, "router"):
+            self._load()
 
     def _predict(self, state: dict, questions: dict) -> dict:
         """One batched decision call: all questions over one state share a read."""
@@ -128,6 +133,7 @@ class LayaGate:
 
     # -- pre-check: what did the user ask, and how much TwIL do we owe it? ----
     def gate(self, text: str) -> Decision:
+        self._ensure()
         t0 = time.perf_counter()
         raw = self._predict({"text": text}, PRE_QUESTIONS)
 
@@ -155,6 +161,7 @@ class LayaGate:
 
     # -- post-check: is the finished answer trustworthy -----------------------
     def verify(self, question: str, answer: str) -> dict:
+        self._ensure()
         if "\\boxed" in answer:
             answer = answer.rsplit("\\boxed", 1)[-1].rstrip("$]}").strip()
         raw = self._predict({"question": question, "answer": answer[:2000]},
@@ -225,6 +232,10 @@ class HTTPGate(LayaGate):
         self.key = os.environ["TWILA_GATE_API_KEY"]
         self.model = os.environ.get("TWILA_GATE_MODEL", "")
         self.last_decision = None  # no heavy local checkpoint
+
+    def _ensure(self):
+        """No local checkpoint exists; the HTTP call loads nothing."""
+        return None
 
     def _predict(self, state: dict, questions: dict) -> dict:
         import requests

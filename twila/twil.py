@@ -27,11 +27,16 @@ class Turn:
 
 
 def split_thinking(text: str) -> tuple[str, str]:
-    """Split raw completion into (reasoning, content) on the TwIL tags."""
-    a, b = "thinke/visual>", ">"
-    if b in text:
-        _r, content = text.split(b, 1)
-        return _r.removeprefix(a).lstrip(), content.lstrip()
+    """Fallback parser when the server hasn't separated the reasoning block."""
+    _open = "thinke/visual>"
+    if _open in text:
+        body = text[text.index(_open) + len(_open):]
+        i = body.find(">")  # closing tag; reasoning may rarely contain one
+        if i >= 0:
+            return body[:i].strip(), body[i + 1:].lstrip()
+        return "", text
+    if text.lstrip().startswith(">"):
+        return "", text.lstrip()[1:].lstrip()
     return "", text.strip()
 
 
@@ -69,7 +74,11 @@ class TwilClient:
             extra_body=kwargs,
         )
         dt = time.perf_counter() - t0
-        reasoning, content = split_thinking(completion.choices[0].message.content or "")
+        msg = completion.choices[0].message
+        reasoning = getattr(msg, "reasoning_content", "") or ""
+        content = msg.content or ""
+        if not reasoning:  # server didn't separate: parse the block ourselves
+            reasoning, content = split_thinking(content)
         tokens_out = completion.usage.completion_tokens if completion.usage else 0
         return Turn(
             content=content.strip(), reasoning=reasoning,
