@@ -12,5 +12,7 @@ if [ ! -s "$GGUF" ]; then
     "https://huggingface.co/webAI-Official/TwIL-8B/resolve/main/TwIL-8B-Q4_K_M-balanced.gguf"
 fi
 
-# 12 threads / 40k ctx / 32k max gen: the card's contest-math budgets, CPU-sized.
-exec llama serve -m "$GGUF" --port "$PORT" -t 10 -c 40960 -n 32768 "$@"
+# 10 threads / 2 parallel slots (40k ctx split 2 -> 20.5k each, fits prompt+16k
+# trail) / 32k max gen: the card's contest-math budgets, CPU-sized. -np 2 keeps
+# interactive asks off the eval bench queue.
+exec llama serve -m "$GGUF" --port "$PORT" -t 10 -c 40960 -n 32768 -np 2 "$@"
