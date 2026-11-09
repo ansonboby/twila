@@ -163,14 +163,6 @@ efficiency claim directly.
 - CPU throughput is real-world thin (~1 tok/s class); the receipts record
   it. Raise budgets, not expectations, without a GPU.
 
-- Laya's default checkpoints are weak zero-shot on domains far from their
-  training distribution — thresholds `0.5`/`0.85` here are first-guesses, not
-  calibrated. Calibrate on your own receipts.
-- `choice` degrades over ~20 options (upstream docs); chunk-filter large
-  candidate sets via `noul` first.
-- TwIL-8B ships a webai non-commercial license; Laya is Apache-2.0.
-- Q4_K_M quantization costs some score vs the card's bf16 evals.
-
 ## License
 
 MIT for this repo's code. Model weights keep their upstream licenses.
